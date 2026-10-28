@@ -76,6 +76,20 @@
   .deploy pre{margin-top:12px;max-height:240px;overflow:auto;background:#0A0A0A;color:#E5E5E5;border:1px solid #262626;font-family:var(--mono);font-size:12px;line-height:1.55;padding:12px 14px;border-radius:10px;white-space:pre-wrap;word-break:break-word;}
   .deploy .off{font-size:15px;color:var(--muted);}
 
+  .agent{margin-top:10px;font-size:15px;color:var(--muted);max-width:60ch;}
+  .agent a{color:var(--orange-dark);} .agent code{font-family:var(--mono);font-size:13.5px;}
+  .tabs{display:flex;gap:6px;background:var(--field);border:1px solid var(--line);border-radius:999px;padding:4px;width:max-content;max-width:100%;margin-bottom:20px;}
+  .deploy .tab{margin:0;font:inherit;font-weight:600;font-size:14px;padding:8px 16px;border:0;border-radius:999px;background:transparent;color:var(--muted);cursor:pointer;}
+  .deploy .tab:hover{transform:none;color:var(--fg);}
+  .deploy .tab.on{background:var(--ink);color:var(--bg);}
+  .deploy .drop{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;text-align:center;min-height:150px;padding:24px;border:2px dashed var(--line);border-radius:14px;background:var(--field);cursor:pointer;transition:border-color .15s ease,background .15s ease;}
+  .drop:hover,.drop.over{border-color:var(--orange);background:#FFF4EF;}
+  .drop.has{border-style:solid;border-color:var(--orange);}
+  .drop strong{font-size:16px;}
+  .drop span{font-size:14px;color:var(--muted);} .drop span a{color:var(--orange-dark);}
+  .drop em{font-style:normal;font-family:var(--mono);font-size:13px;color:var(--orange-dark);}
+  .deploy .hint code,.deploy .msg code{font-family:var(--mono);font-size:12.5px;background:var(--field);padding:1px 5px;border-radius:5px;}
+  .deploy [hidden]{display:none !important;}
   .live{margin-top:26px;display:flex;flex-wrap:wrap;gap:10px;}
   .live a{text-decoration:none;font-family:var(--mono);font-size:13px;padding:8px 14px;border:1px solid var(--line);border-radius:999px;background:var(--card);}
   .live a:hover{border-color:var(--orange);color:var(--orange);}
@@ -122,45 +136,67 @@
     <p class="empty-note">New projects appear here as they ship.</p>
 
     <h2 id="deploy">Ship <span class="hl">yours</span>.</h2>
-    <p class="sub">Got an app on GitHub? Put it live at your own address on this server. Paste a public repo, pick a name, done. Push changes and come back here to redeploy.</p>
+    <p class="sub">Put your site or app live at your own address on this server. Drop the files, or point us at a public GitHub repo. No account needed.</p>
+    <p class="agent">Working with Claude, Codex or another AI agent? Give it this link and it can deploy for you: <a href="/deploy"><code>build.happyoperators.com/deploy</code></a></p>
 
     <form class="deploy" id="deploy-form" novalidate>
-      <div class="row">
-        <div class="full">
-          <label for="d-repo">Public GitHub repo</label>
-          <input id="d-repo" name="repo" type="url" placeholder="https://github.com/you/your-app" required autocomplete="off">
+      <div class="tabs" role="tablist">
+        <button type="button" role="tab" class="tab on" data-mode="upload" aria-selected="true">Upload files</button>
+        <button type="button" role="tab" class="tab" data-mode="github" aria-selected="false">From GitHub</button>
+      </div>
+
+      <div data-panel="upload">
+        <label class="drop" id="d-drop" for="d-files">
+          <input id="d-files" type="file" multiple hidden>
+          <strong>Drop a folder, a .zip or an HTML file here</strong>
+          <span>or <u>choose files</u> · <a href="#" id="d-pick-folder">choose a folder</a></span>
+          <em id="d-picked"></em>
+        </label>
+        <input id="d-folder" type="file" webkitdirectory multiple hidden>
+        <p class="hint">Static sites: HTML, CSS, JS, images. Needs an <code>index.html</code>. Built a React or Vite app? Upload the <code>dist</code> folder. Max 25 MB.</p>
+      </div>
+
+      <div data-panel="github" hidden>
+        <div class="row">
+          <div class="full">
+            <label for="d-repo">Public GitHub repo</label>
+            <input id="d-repo" name="repo" type="url" placeholder="https://github.com/you/your-app" autocomplete="off">
+          </div>
+        </div>
+        <div class="row">
+          <div>
+            <label for="d-pack">What is it?</label>
+            <select id="d-pack" name="pack">
+              <option value="auto">An app (Node, Python, etc. auto-detected)</option>
+              <option value="dockerfile">An app with a Dockerfile</option>
+              <option value="static">A static site (just HTML files)</option>
+            </select>
+          </div>
+          <div>
+            <label for="d-port">Port your app listens on</label>
+            <input id="d-port" name="port" inputmode="numeric" value="3000">
+          </div>
+        </div>
+        <div class="row">
+          <div class="full">
+            <label for="d-branch">Branch</label>
+            <input id="d-branch" name="branch" value="main" autocomplete="off">
+          </div>
         </div>
       </div>
+
       <div class="row">
         <div class="full">
           <label for="d-name">Your address</label>
           <div class="addr">
-            <input id="d-name" name="name" placeholder="your-app" required autocomplete="off" maxlength="30" pattern="[a-z0-9-]{3,30}">
+            <input id="d-name" name="name" placeholder="your-site" required autocomplete="off" maxlength="30" pattern="[a-z0-9-]{3,30}">
             <span>.build.happyoperators.com</span>
           </div>
-          <p class="hint">Lowercase letters, numbers and dashes. Same name and same repo again = redeploy.</p>
+          <p class="hint">Lowercase letters, numbers and dashes. Use the same name again to update.</p>
         </div>
       </div>
-      <div class="row">
-        <div>
-          <label for="d-pack">What is it?</label>
-          <select id="d-pack" name="pack">
-            <option value="auto">An app (Node, Python, etc. auto-detected)</option>
-            <option value="dockerfile">An app with a Dockerfile</option>
-            <option value="static">A static site (just HTML files)</option>
-          </select>
-        </div>
-        <div>
-          <label for="d-port">Port your app listens on</label>
-          <input id="d-port" name="port" inputmode="numeric" value="3000">
-        </div>
-      </div>
-      <div class="row">
-        <div>
-          <label for="d-branch">Branch</label>
-          <input id="d-branch" name="branch" value="main" autocomplete="off">
-        </div>
-        <div id="d-code-wrap">
+      <div class="row" id="d-code-wrap">
+        <div class="full">
           <label for="d-code">Access code</label>
           <input id="d-code" name="code" autocomplete="off" placeholder="Ask Matt">
         </div>
@@ -185,86 +221,176 @@
   var port = document.getElementById('d-port');
   var name = document.getElementById('d-name');
   var repo = document.getElementById('d-repo');
+  var code = document.getElementById('d-code');
+  var drop = document.getElementById('d-drop');
+  var picked = document.getElementById('d-picked');
+  var mode = 'upload';
+  var chosen = []; // [{ path, file }]
 
   function say(text, err, html) {
     msg.className = 'msg' + (err ? ' err' : '');
     if (html) msg.innerHTML = html; else msg.textContent = text;
   }
   function esc(s) { return String(s).replace(/[&<>"']/g, function (c) { return '&#' + c.charCodeAt(0) + ';'; }); }
+  function slug(s) { return String(s).toLowerCase().replace(/\.(zip|html?)$/, '').replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-+|-+$/g, '').slice(0, 30); }
+  function store(k, v) { try { if (v === undefined) return localStorage.getItem(k); localStorage.setItem(k, v); } catch (e) { return null; } }
+
+  // ----- tabs -----
+  [].forEach.call(document.querySelectorAll('.tab'), function (t) {
+    t.addEventListener('click', function () {
+      mode = t.getAttribute('data-mode');
+      [].forEach.call(document.querySelectorAll('.tab'), function (x) { x.classList.toggle('on', x === t); x.setAttribute('aria-selected', x === t); });
+      [].forEach.call(document.querySelectorAll('[data-panel]'), function (p) { p.hidden = p.getAttribute('data-panel') !== mode; });
+      say('');
+    });
+  });
 
   pack.addEventListener('change', function () {
     port.disabled = pack.value === 'static';
     if (pack.value === 'static') port.value = '80';
     else if (port.value === '80') port.value = '3000';
   });
-  name.addEventListener('input', function () {
-    name.value = name.value.toLowerCase().replace(/[^a-z0-9-]/g, '');
-  });
+  name.addEventListener('input', function () { name.value = name.value.toLowerCase().replace(/[^a-z0-9-]/g, ''); });
   repo.addEventListener('change', function () {
     var m = repo.value.match(/github\.com\/[^\/]+\/([^\/?#]+)/);
-    if (m && !name.value) name.value = m[1].replace(/\.git$/, '').toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/^-+|-+$/g, '').slice(0, 30);
+    if (m && !name.value) name.value = slug(m[1].replace(/\.git$/, ''));
   });
 
+  // ----- picking files -----
+  function setChosen(list, label) {
+    chosen = list.filter(function (f) { return !/(^|\/)(\.|__MACOSX|node_modules)/.test(f.path); });
+    if (!chosen.length) { picked.textContent = ''; return; }
+    var total = chosen.reduce(function (n, f) { return n + f.file.size; }, 0);
+    picked.textContent = (label || (chosen.length === 1 ? chosen[0].path : chosen.length + ' files')) + ' · ' + (total < 1048576 ? Math.max(1, Math.round(total / 1024)) + ' KB' : (total / 1048576).toFixed(1) + ' MB');
+    drop.classList.add('has');
+    if (!name.value) name.value = slug(label || chosen[0].path.split('/')[0]);
+    say('');
+  }
+  document.getElementById('d-files').addEventListener('change', function (e) {
+    setChosen([].map.call(e.target.files, function (f) { return { path: f.name, file: f }; }));
+  });
+  var folder = document.getElementById('d-folder');
+  document.getElementById('d-pick-folder').addEventListener('click', function (e) { e.preventDefault(); folder.click(); });
+  folder.addEventListener('change', function (e) {
+    var files = [].map.call(e.target.files, function (f) { return { path: f.webkitRelativePath || f.name, file: f }; });
+    setChosen(files, files.length ? files[0].path.split('/')[0] : '');
+  });
+
+  function walk(entry, prefix) {
+    return new Promise(function (resolve) {
+      if (entry.isFile) return entry.file(function (f) { resolve([{ path: prefix + f.name, file: f }]); }, function () { resolve([]); });
+      var reader = entry.createReader(), all = [];
+      (function more() {
+        reader.readEntries(function (batch) {
+          if (!batch.length) return Promise.all(all).then(function (r) { resolve([].concat.apply([], r)); });
+          batch.forEach(function (b) { all.push(walk(b, prefix + entry.name + '/')); });
+          more();
+        }, function () { resolve([]); });
+      })();
+    });
+  }
+  ['dragenter', 'dragover'].forEach(function (ev) { drop.addEventListener(ev, function (e) { e.preventDefault(); drop.classList.add('over'); }); });
+  ['dragleave', 'drop'].forEach(function (ev) { drop.addEventListener(ev, function (e) { e.preventDefault(); drop.classList.remove('over'); }); });
+  drop.addEventListener('drop', function (e) {
+    var items = e.dataTransfer.items;
+    if (items && items[0] && items[0].webkitGetAsEntry) {
+      var entries = [].map.call(items, function (i) { return i.webkitGetAsEntry(); }).filter(Boolean);
+      Promise.all(entries.map(function (en) { return walk(en, ''); })).then(function (r) {
+        var list = [].concat.apply([], r);
+        setChosen(list, entries.length === 1 && entries[0].isDirectory ? entries[0].name : '');
+      });
+    } else {
+      setChosen([].map.call(e.dataTransfer.files, function (f) { return { path: f.name, file: f }; }));
+    }
+  });
+
+  function b64(file) {
+    return new Promise(function (resolve, reject) {
+      var r = new FileReader();
+      r.onload = function () { resolve(String(r.result).split(',')[1] || ''); };
+      r.onerror = reject;
+      r.readAsDataURL(file);
+    });
+  }
+
+  // ----- live list -----
   function showLive(apps) {
     live.innerHTML = '';
     apps.forEach(function (a) {
       var el = document.createElement('a');
       el.href = a.url;
       el.innerHTML = esc(a.name) + '<span class="rd">.</span>build';
-      el.title = a.repo;
       live.appendChild(el);
     });
   }
-
-  fetch('/api/deploys').then(function (r) { return r.json(); }).then(function (d) {
-    if (!d.enabled) {
-      form.innerHTML = '<p class="off">Deploys open soon.</p>';
-      return;
-    }
-    if (!d.needsCode) document.getElementById('d-code-wrap').style.visibility = 'hidden';
+  function refresh() { return fetch('/api/deploys').then(function (r) { return r.json(); }); }
+  refresh().then(function (d) {
+    if (!d.enabled) { form.innerHTML = '<p class="off">Deploys open soon.</p>'; return; }
+    if (!d.needsCode) document.getElementById('d-code-wrap').hidden = true;
     showLive(d.apps || []);
   }).catch(function () {});
 
-  function poll(id, url) {
+  function done(url, extra) {
+    go.disabled = false;
+    say('', false, 'Live: <a href="' + esc(url) + '" target="_blank" rel="noopener">' + esc(url) + '</a>. The padlock can take a minute to appear.' + (extra || ''));
+    refresh().then(function (x) { showLive(x.apps || []); });
+  }
+  function poll(id, url, extra) {
     fetch('/api/deploys/status/' + id).then(function (r) { return r.json(); }).then(function (d) {
-      if (d.log && d.log.length) { log.hidden = false; log.textContent = d.log.join('\n'); log.scrollTop = log.scrollHeight; }
-      if (d.status === 'finished') {
+      if (mode === 'github' && d.log && d.log.length) { log.hidden = false; log.textContent = d.log.join('\n'); log.scrollTop = log.scrollHeight; }
+      if (d.status === 'finished') return done(url, extra);
+      if (d.status === 'failed' || d.status === 'cancelled-by-user') {
         go.disabled = false;
-        say('', false, 'Live: <a href="' + esc(url) + '" target="_blank" rel="noopener">' + esc(url) + '</a>. The padlock can take a minute to appear.');
-        fetch('/api/deploys').then(function (r) { return r.json(); }).then(function (x) { showLive(x.apps || []); });
-      } else if (d.status === 'failed' || d.status === 'cancelled-by-user') {
-        go.disabled = false;
-        say('The build failed. Read the log below, fix it in your repo, push, and deploy again.', true);
-      } else {
-        say('Building (' + (d.status || 'queued') + '). This usually takes 1 to 3 minutes…');
-        setTimeout(function () { poll(id, url); }, 4000);
+        return say(mode === 'github' ? 'The build failed. Read the log below, fix it in your repo, push, and deploy again.' : 'Switching on your address failed. Try again in a minute.', true);
       }
-    }).catch(function () { setTimeout(function () { poll(id, url); }, 6000); });
+      if (mode === 'github') say('Building (' + (d.status || 'queued') + '). This usually takes 1 to 3 minutes…');
+      else say('', false, 'Uploaded. Switching on your address, about a minute…' + (extra || ''));
+      setTimeout(function () { poll(id, url, extra); }, 4000);
+    }).catch(function () { setTimeout(function () { poll(id, url, extra); }, 6000); });
+  }
+
+  function keyNote(n, key) {
+    store('site-key:' + n, key);
+    return '<br><br>Your update key: <code>' + esc(key) + '</code><br>This browser remembers it. Save it somewhere if you will update from another computer.';
+  }
+
+  function upload() {
+    var n = name.value.trim();
+    if (!chosen.length) return Promise.reject(new Error('Drop your files first.'));
+    var q = '?name=' + encodeURIComponent(n) + '&code=' + encodeURIComponent(code.value.trim());
+    var key = store('site-key:' + n);
+    if (key) q += '&key=' + encodeURIComponent(key);
+    var one = chosen.length === 1 ? chosen[0] : null;
+    if (one && /\.zip$/i.test(one.path)) return fetch('/api/sites' + q, { method: 'POST', headers: { 'Content-Type': 'application/zip' }, body: one.file });
+    if (one && /\.html?$/i.test(one.path)) return fetch('/api/sites' + q, { method: 'POST', headers: { 'Content-Type': 'text/html' }, body: one.file });
+    return Promise.all(chosen.map(function (f) { return b64(f.file).then(function (d) { return { path: f.path, base64: d }; }); }))
+      .then(function (files) {
+        return fetch('/api/sites', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: n, code: code.value.trim(), key: key || undefined, files: files }) });
+      });
   }
 
   form.addEventListener('submit', function (e) {
     e.preventDefault();
     go.disabled = true;
     log.hidden = true;
-    say('Setting it up…');
-    var body = {
-      repo: repo.value.trim(),
-      name: name.value.trim(),
-      pack: pack.value,
-      port: port.value.trim(),
-      branch: document.getElementById('d-branch').value.trim(),
-      code: document.getElementById('d-code').value.trim()
-    };
-    fetch('/api/deploys', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
-      .then(function (r) { return r.json().then(function (d) { return [r.ok, d]; }); })
+    say(mode === 'upload' ? 'Uploading…' : 'Setting it up…');
+    var req = mode === 'upload' ? upload() : fetch('/api/deploys', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ repo: repo.value.trim(), name: name.value.trim(), pack: pack.value, port: port.value.trim(),
+        branch: document.getElementById('d-branch').value.trim(), code: code.value.trim() })
+    });
+    req.then(function (r) { return r.json().then(function (d) { return [r.ok, d]; }); })
       .then(function (x) {
         var ok = x[0], d = x[1];
         if (!ok) { go.disabled = false; return say(d.error || 'Something went wrong.', true); }
-        if (!d.deployment) { go.disabled = false; return say('', false, 'Queued. It will be live at <a href="' + esc(d.url) + '">' + esc(d.url) + '</a> in a few minutes.'); }
-        say(d.redeploy ? 'Redeploying…' : 'Created. Building…');
-        poll(d.deployment, d.url);
+        var extra = d.key ? keyNote(d.name, d.key) : '';
+        if (mode === 'upload' && !d.deployment) return done(d.url, extra);
+        if (!d.deployment) { go.disabled = false; return say('', false, 'Queued. It will be live at <a href="' + esc(d.url) + '">' + esc(d.url) + '</a> in a few minutes.' + extra); }
+        say('', false, (mode === 'upload' ? 'Uploaded. Switching on your address, about a minute…' : (d.redeploy ? 'Redeploying…' : 'Created. Building…')) + extra);
+        poll(d.deployment, d.url, extra);
       })
-      .catch(function () { go.disabled = false; say('Could not reach the server. Try again.', true); });
+      .catch(function (err) { go.disabled = false; say(err && err.message && err.message.indexOf('first') > -1 ? err.message : 'Could not reach the server. Try again.', true); });
   });
 })();
 </script>

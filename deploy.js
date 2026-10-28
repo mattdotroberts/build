@@ -114,7 +114,10 @@ async function list() {
 
 async function deploy(body, ip) {
   if (!TOKEN) return [503, { error: 'Deploys are not switched on yet.' }];
-  if (CODE && String(body.code || '').trim() !== CODE) return [403, { error: 'That access code is not right.' }];
+  const missing = ['repo', 'name'].filter((k) => !String(body[k] || '').trim());
+  if (CODE && !String(body.code || '').trim()) missing.push('code');
+  if (missing.length) return [400, { error: 'Missing: ' + missing.join(', ') + '.', missing: missing }];
+  if (CODE && String(body.code || '').trim() !== CODE) return [403, { error: 'That access code is not right. Ask the person who gave you this link.' }];
   if (limited(ip)) return [429, { error: 'Too many deploys from one address. Try again in an hour.' }];
 
   const name = String(body.name || '').trim().toLowerCase();
@@ -193,6 +196,7 @@ async function handle(req, res, p, send, readBody) {
       try { body = JSON.parse(await readBody(req)); }
       catch (e) { return json(400, { error: 'Bad request' }); }
       const [code, out] = await deploy(body, ip);
+      if (code >= 400) out.docs = 'https://' + DOMAIN + '/deploy';
       return json(code, out);
     }
     const s = p.match(/^\/api\/deploys\/status\/([a-z0-9]+)$/);
@@ -204,4 +208,4 @@ async function handle(req, res, p, send, readBody) {
   }
 }
 
-module.exports = { handle };
+module.exports = { handle, api, liveApps, urlFor, NAME_RE, RESERVED, TOKEN, CODE, DOMAIN, MAX_APPS };
