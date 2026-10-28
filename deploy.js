@@ -7,7 +7,7 @@
 //   GET  /api/deploys/status/<uuid>   -> { status, log: [lines] }
 //
 // Env:
-//   COOLIFY_URL          default http://coolify:8080 (Coolify's internal address)
+//   COOLIFY_URL          default http://178.104.187.207:8000 (this server's Coolify)
 //   COOLIFY_TOKEN        Coolify API token (Keys & Tokens). Deploys are off without it.
 //   COOLIFY_SERVER_UUID  server to deploy onto (default: first server)
 //   DEPLOY_PROJECT       Coolify project for these apps (default "Deploys", created if missing)
@@ -15,7 +15,7 @@
 //   DEPLOY_DOMAIN        default build.happyoperators.com
 //   DEPLOY_MAX_APPS      default 40
 
-const COOLIFY_URL = (process.env.COOLIFY_URL || 'http://coolify:8080').replace(/\/$/, '');
+const COOLIFY_URL = (process.env.COOLIFY_URL || 'http://178.104.187.207:8000').replace(/\/$/, '');
 const TOKEN = process.env.COOLIFY_TOKEN || '';
 const DOMAIN = process.env.DEPLOY_DOMAIN || 'build.happyoperators.com';
 const PROJECT_NAME = process.env.DEPLOY_PROJECT || 'Deploys';
