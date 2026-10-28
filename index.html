@@ -163,26 +163,7 @@
             <input id="d-repo" name="repo" type="url" placeholder="https://github.com/you/your-app" autocomplete="off">
           </div>
         </div>
-        <div class="row">
-          <div>
-            <label for="d-pack">What is it?</label>
-            <select id="d-pack" name="pack">
-              <option value="auto">An app (Node, Python, etc. auto-detected)</option>
-              <option value="dockerfile">An app with a Dockerfile</option>
-              <option value="static">A static site (just HTML files)</option>
-            </select>
-          </div>
-          <div>
-            <label for="d-port">Port your app listens on</label>
-            <input id="d-port" name="port" inputmode="numeric" value="3000">
-          </div>
-        </div>
-        <div class="row">
-          <div class="full">
-            <label for="d-branch">Branch</label>
-            <input id="d-branch" name="branch" value="main" autocomplete="off">
-          </div>
-        </div>
+        <p class="hint">We read the repo and work out how to build and run it. Works with plain HTML, Node, Next.js, Vite, React, Python and anything with a Dockerfile.</p>
       </div>
 
       <div class="row">
@@ -217,8 +198,6 @@
   var msg = document.getElementById('d-msg');
   var log = document.getElementById('d-log');
   var live = document.getElementById('d-live');
-  var pack = document.getElementById('d-pack');
-  var port = document.getElementById('d-port');
   var name = document.getElementById('d-name');
   var repo = document.getElementById('d-repo');
   var code = document.getElementById('d-code');
@@ -245,11 +224,6 @@
     });
   });
 
-  pack.addEventListener('change', function () {
-    port.disabled = pack.value === 'static';
-    if (pack.value === 'static') port.value = '80';
-    else if (port.value === '80') port.value = '3000';
-  });
   name.addEventListener('input', function () { name.value = name.value.toLowerCase().replace(/[^a-z0-9-]/g, ''); });
   repo.addEventListener('change', function () {
     var m = repo.value.match(/github\.com\/[^\/]+\/([^\/?#]+)/);
@@ -377,8 +351,7 @@
     say(mode === 'upload' ? 'Uploading…' : 'Setting it up…');
     var req = mode === 'upload' ? upload() : fetch('/api/deploys', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ repo: repo.value.trim(), name: name.value.trim(), pack: pack.value, port: port.value.trim(),
-        branch: document.getElementById('d-branch').value.trim(), code: code.value.trim() })
+      body: JSON.stringify({ repo: repo.value.trim(), name: name.value.trim(), code: code.value.trim() })
     });
     req.then(function (r) { return r.json().then(function (d) { return [r.ok, d]; }); })
       .then(function (x) {
@@ -387,7 +360,7 @@
         var extra = d.key ? keyNote(d.name, d.key) : '';
         if (mode === 'upload' && !d.deployment) return done(d.url, extra);
         if (!d.deployment) { go.disabled = false; return say('', false, 'Queued. It will be live at <a href="' + esc(d.url) + '">' + esc(d.url) + '</a> in a few minutes.' + extra); }
-        say('', false, (mode === 'upload' ? 'Uploaded. Switching on your address, about a minute…' : (d.redeploy ? 'Redeploying…' : 'Created. Building…')) + extra);
+        say('', false, (mode === 'upload' ? 'Uploaded. Switching on your address, about a minute…' : (d.redeploy ? 'Redeploying' : 'Building') + (d.detected ? ' your ' + esc(d.detected) : '') + '…') + extra);
         poll(d.deployment, d.url, extra);
       })
       .catch(function (err) { go.disabled = false; say(err && err.message && err.message.indexOf('first') > -1 ? err.message : 'Could not reach the server. Try again.', true); });

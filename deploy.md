@@ -59,11 +59,12 @@ Use this for apps that run a server (Node, Python, etc.) or anything with a Dock
 ```bash
 curl -s -X POST https://build.happyoperators.com/api/deploys \
   -H "Content-Type: application/json" \
-  -d '{"repo":"https://github.com/OWNER/REPO","name":"NAME","code":"CODE","pack":"auto","port":3000,"branch":"main"}'
+  -d '{"repo":"https://github.com/OWNER/REPO","name":"NAME","code":"CODE"}'
 ```
 
-- `pack`: `auto` (detects Node, Python and more), `dockerfile` (repo has a Dockerfile) or `static`.
-- `port`: the port the app listens on. Usually 3000. The app should read the `PORT` environment variable if it can.
+- The server reads the repo and works out how to run it: Dockerfile (uses its `EXPOSE` port), Node or Next.js (port 3000, `PORT` is set for you), Vite or React front-ends (built, then served as static files), Python, Go, Ruby, or a plain `index.html`. The reply says what it `detected`.
+- The app should listen on the `PORT` environment variable. Most frameworks already do.
+- Optional overrides if detection gets it wrong: `"branch"` (default: the repo's default branch), `"pack"` (`auto`, `dockerfile` or `static`) and `"port"`.
 - The reply has a `deployment` id. Poll `GET https://build.happyoperators.com/api/deploys/status/<deployment>` every few seconds. `status` goes `queued`, `in_progress`, then `finished` or `failed`. `log` has the last build lines; if it failed, read them, fix the repo, push, and send the same request again.
 - Sending the same name with the same repo again redeploys it.
 

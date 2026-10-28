@@ -128,16 +128,23 @@ async function deploy(body, ip) {
   if (!m) return [400, { error: 'Paste a public GitHub link like https://github.com/you/your-app' }];
   const repo = 'https://github.com/' + m[1] + '/' + m[2];
 
-  const branch = String(body.branch || 'main').trim() || 'main';
-  if (!BRANCH_RE.test(branch)) return [400, { error: 'That branch name looks wrong.' }];
-
-  const pack = PACKS[body.pack] ? body.pack : 'auto';
-  const port = pack === 'static' ? 80 : Number(body.port || 3000);
-  if (!Number.isInteger(port) || port < 1 || port > 65535) return [400, { error: 'Port must be a number, usually 3000.' }];
-
-  // repo must exist and be public
+  // repo must exist and be public; we read it to work out how to run it
   const gh = await fetch('https://api.github.com/repos/' + m[1] + '/' + m[2], { headers: { 'User-Agent': DOMAIN } });
   if (gh.status === 404) return [400, { error: 'Cannot see that repo. Is it public?' }];
+  const info = gh.ok ? await gh.json() : {};
+
+  const branch = String(body.branch || info.default_branch || 'main').trim();
+  if (!BRANCH_RE.test(branch)) return [400, { error: 'That branch name looks wrong.' }];
+
+  // people rarely know the build type or port, so detect them (agents can still override)
+  let plan;
+  try { plan = await detect(m[1], m[2], branch); }
+  catch (e) { return [400, { error: e.message }]; }
+  if (PACKS[body.pack]) plan.pack = body.pack;
+  if (body.port) plan.port = Number(body.port);
+  if (plan.pack === 'static' && !body.port) plan.port = 80;
+  const port = plan.port;
+  if (!Number.isInteger(port) || port < 1 || port > 65535) return [400, { error: 'Port must be a number, usually 3000.' }];
 
   const apps = await liveApps();
   const existing = apps.get(name);
@@ -156,8 +163,9 @@ async function deploy(body, ip) {
       description: 'Deployed from ' + DOMAIN + ' form',
       git_repository: repo,
       git_branch: branch,
-      build_pack: PACKS[pack],
-      is_static: pack === 'static',
+      build_pack: PACKS[plan.pack],
+      is_static: plan.pack === 'static' || !!plan.publish,
+      publish_directory: plan.publish || undefined,
       ports_exposes: String(port),
       domains: urlFor(name),
       limits_memory: '512m',
@@ -165,11 +173,54 @@ async function deploy(body, ip) {
       instant_deploy: false
     });
     uuid = created.uuid;
+    // most frameworks listen on $PORT, so tell the app which one we route to
+    if (plan.pack !== 'static' && !plan.publish) {
+      await api('POST', '/applications/' + uuid + '/envs', { key: 'PORT', value: String(port), is_preview: false });
+    }
   }
 
   const queued = await api('POST', '/deploy?uuid=' + encodeURIComponent(uuid));
   const d = queued && queued.deployments && queued.deployments[0];
-  return [200, { name: name, url: urlFor(name), redeploy: !!existing, deployment: d ? d.deployment_uuid : null }];
+  return [200, { name: name, url: urlFor(name), redeploy: !!existing, detected: plan.label, branch: branch, port: port, deployment: d ? d.deployment_uuid : null }];
+}
+
+// Look at the repo's top level and decide how to run it.
+async function detect(owner, repo, branch) {
+  const headers = { 'User-Agent': DOMAIN };
+  const res = await fetch('https://api.github.com/repos/' + owner + '/' + repo + '/contents?ref=' + encodeURIComponent(branch), { headers: headers });
+  if (res.status === 404) throw new Error('Cannot find branch "' + branch + '" in that repo.');
+  if (!res.ok) return { pack: 'auto', port: 3000, label: 'app (auto-detected at build)' }; // GitHub rate limit: let the builder decide
+  const files = new Set((await res.json()).map((f) => f.name));
+  const raw = async (file) => {
+    const r = await fetch('https://raw.githubusercontent.com/' + owner + '/' + repo + '/' + encodeURIComponent(branch) + '/' + file, { headers: headers });
+    return r.ok ? r.text() : '';
+  };
+
+  if (files.has('Dockerfile')) {
+    const m = (await raw('Dockerfile')).match(/^\s*EXPOSE\s+(\d+)/mi);
+    return { pack: 'dockerfile', port: m ? Number(m[1]) : 3000, label: 'Dockerfile' };
+  }
+  if (files.has('package.json')) {
+    let pkg = {};
+    try { pkg = JSON.parse(await raw('package.json')); } catch (e) { pkg = {}; }
+    const deps = Object.assign({}, pkg.dependencies, pkg.devDependencies);
+    const scripts = pkg.scripts || {};
+    // front-end only (Vite, Create React App, Astro static): build it and serve the output folder
+    if (!scripts.start || deps.vite && !deps.express && !deps.next) {
+      if (deps.vite) return { pack: 'auto', port: 80, publish: '/dist', label: 'Vite site (built, then served as static files)' };
+      if (deps['react-scripts']) return { pack: 'auto', port: 80, publish: '/build', label: 'React site (built, then served as static files)' };
+      if (deps.astro) return { pack: 'auto', port: 80, publish: '/dist', label: 'Astro site (built, then served as static files)' };
+    }
+    return { pack: 'auto', port: 3000, label: deps.next ? 'Next.js app' : 'Node app' };
+  }
+  for (const f of ['requirements.txt', 'pyproject.toml', 'Pipfile']) {
+    if (files.has(f)) return { pack: 'auto', port: 3000, label: 'Python app' };
+  }
+  for (const [f, label] of [['go.mod', 'Go app'], ['Gemfile', 'Ruby app'], ['Cargo.toml', 'Rust app'], ['composer.json', 'PHP app'], ['deno.json', 'Deno app']]) {
+    if (files.has(f)) return { pack: 'auto', port: 3000, label: label };
+  }
+  if (files.has('index.html')) return { pack: 'static', port: 80, label: 'static site' };
+  throw new Error('Could not tell how to run this repo. It needs an index.html, a package.json, a requirements.txt or a Dockerfile at the top level.');
 }
 
 async function status(uuid) {
