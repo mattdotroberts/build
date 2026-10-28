@@ -14,6 +14,14 @@ AI agents (Claude, Codex, Cursor and others): read on. Everything below works wi
 
 If anything is missing, the API answers with `"missing": [...]` and a short explanation. Ask the user for those values, then try again.
 
+## Which option?
+
+Decide this yourself by looking at the project. The user does not need to know or choose.
+
+- **Prefer Option A (upload).** No GitHub needed. Use it whenever the result is a website that runs in the browser: plain HTML, or anything that builds to static files (Vite, React, Astro, Next.js with `output: 'export'`, and similar).
+- **Use Option B (GitHub) only when the project must run a server**: an API, a backend (Express, FastAPI, Flask, Django), server-side rendering, or a database. If it is not on GitHub yet, ask the user to push it to a public repo first, then continue.
+- **Only ask the user if you really can't tell** from the files. Ask one short question, for example: "Does this need to run a server, or is it just a website?"
+
 ## Option A: a static site (folder, zip or one HTML file)
 
 Use this for plain HTML/CSS/JS, or the **built output** of a framework (`dist/`, `build/`, `out/`). There must be an `index.html` at the top level. Max 25 MB.
