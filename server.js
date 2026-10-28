@@ -243,6 +243,47 @@ function docsPage(md) {
     '<a class="b" href="/#deploy">Use the form</a></header>' + out.join('\n') + '</main></body></html>';
 }
 
+// ---------- everything live on <name>.build.happyoperators.com, for the home page ----------
+// Built-in projects (./p), uploaded sites and GitHub deploys, newest first. Cached for a minute.
+function pageInfo(file) {
+  try {
+    const html = fs.readFileSync(file, 'utf8').slice(0, 200000);
+    const t = html.match(/<title[^>]*>([^<]*)<\/title>/i);
+    const d = html.match(/<meta[^>]+name=["']description["'][^>]*content=["']([^"']*)/i)
+      || html.match(/<meta[^>]+property=["']og:description["'][^>]*content=["']([^"']*)/i);
+    const h1 = html.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i);
+    return { title: plain(t ? t[1] : h1 ? h1[1] : ''), desc: d ? plain(d[1]) : '', updated: fs.statSync(file).mtimeMs };
+  } catch (e) { return { title: '', desc: '', updated: 0 }; }
+}
+let projectsCache = { at: 0, data: null };
+async function projects() {
+  if (projectsCache.data && Date.now() - projectsCache.at < 60000) return projectsCache.data;
+  const out = new Map();
+  const urlFor = (n) => 'https://' + n + '.' + SITE;
+  for (const n of fs.readdirSync(path.join(ROOT, 'p'))) {
+    const f = path.join(ROOT, 'p', n, 'index.html');
+    if (fs.existsSync(f)) out.set(n, Object.assign({ name: n, url: urlFor(n), kind: 'Happy Operators' }, pageInfo(f)));
+  }
+  const up = path.join(DATA_DIR, 'sites');
+  if (fs.existsSync(up)) {
+    for (const n of fs.readdirSync(up)) {
+      const f = path.join(up, n, 'index.html');
+      if (!n.startsWith('.') && !out.has(n) && fs.existsSync(f)) out.set(n, Object.assign({ name: n, url: urlFor(n), kind: 'Upload' }, pageInfo(f)));
+    }
+  }
+  try {
+    const apps = await deploys.liveApps();
+    for (const [n, a] of apps) {
+      if (out.has(n) || /mattdotroberts\/build$/i.test(a.repo)) continue;
+      const repo = String(a.repo || '').replace(/^https:\/\/github\.com\//, '');
+      out.set(n, { name: n, url: urlFor(n), kind: 'GitHub', title: '', desc: repo ? 'From github.com/' + repo : '', updated: 0 });
+    }
+  } catch (e) { /* Coolify down: still show what we have on disk */ }
+  const list = [...out.values()].sort((a, b) => (b.updated || 0) - (a.updated || 0) || a.name.localeCompare(b.name));
+  projectsCache = { at: Date.now(), data: list };
+  return list;
+}
+
 // ---------- server ----------
 const server = http.createServer(async (req, res) => {
   let p;
@@ -250,6 +291,8 @@ const server = http.createServer(async (req, res) => {
   catch (e) { return send(res, 400, 'Bad request', 'text/plain'); }
 
   // ----- API -----
+  if (p === '/api/projects' && req.method === 'GET') return send(res, 200, JSON.stringify({ projects: await projects() }));
+  if ((p === '/api/sites' || p === '/api/deploys') && req.method !== 'GET') projectsCache.at = 0; // something changed: refresh the list
   if (await sites.handle(req, res, p, send, DATA_DIR)) return;
   if (await deploys.handle(req, res, p, send, readBody)) return;
 

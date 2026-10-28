@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Build · Happy Operators</title>
+<meta name="description" content="Put your site or app live at your own address on build.happyoperators.com. Drop the files or link a GitHub repo. No account needed. Works with AI agents.">
 <link rel="icon" href="https://happyoperators.com/favicon.ico">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -109,34 +110,14 @@
       <img src="/brand/ho-lockup-dark.svg" alt="Happy Operators">
       <span class="tag">build</span>
     </a>
-    <a class="cta" href="#deploy">Ship yours</a>
+    <a class="cta" href="#live">See what's live</a>
   </header>
 </div>
 
 <main>
   <div class="wrap">
-    <h1>Things we <span class="hl">built</span>,<br>and left running.</h1>
-    <p class="sub">Small, live projects from Happy Operators and the people who build with us. Each one is real, shipped and online.</p>
-
-    <div class="grid">
-      <a class="card" href="https://t4p-ideaboard.build.happyoperators.com/">
-        <span class="chip">Hackathon</span>
-        <span class="url">t4p-ideaboard<span class="rd">.</span>build</span>
-        <span class="desc">The public idea board for the Tech for Palestine × Thaura hackathon: pin what we should build before Saturday's teams form.</span>
-        <span class="go">Open →</span>
-      </a>
-      <a class="card" href="https://t4p-landing.build.happyoperators.com/">
-        <span class="chip">Hackathon</span>
-        <span class="url">t4p-landing<span class="rd">.</span>build</span>
-        <span class="desc">The hackathon's landing page: the challenge, the day's agenda, the three morning AI sessions and registration.</span>
-        <span class="go">Open →</span>
-      </a>
-    </div>
-
-    <p class="empty-note">New projects appear here as they ship.</p>
-
-    <h2 id="deploy">Ship <span class="hl">yours</span>.</h2>
-    <p class="sub">Put your site or app live at your own address on this server. Drop the files, or point us at a public GitHub repo. No account needed.</p>
+    <h1 id="deploy">Ship <span class="hl">yours</span>.</h1>
+    <p class="sub">Put your site or app live at your own address, in a minute. Drop the files or link a public GitHub repo. No account needed.</p>
     <p class="agent">Working with Claude, Codex or another AI agent? Give it this link and it can deploy for you: <a href="/deploy"><code>build.happyoperators.com/deploy</code></a></p>
 
     <form class="deploy" id="deploy-form" novalidate>
@@ -187,7 +168,23 @@
       <pre id="d-log" hidden></pre>
     </form>
 
-    <div class="live" id="d-live" aria-label="Live deploys"></div>
+
+    <h2 id="live">Live on <span class="hl">build</span>.</h2>
+    <p class="sub">Everything running here right now, from Happy Operators and the people who build with us. Newest first.</p>
+    <div class="grid" id="d-grid">
+      <a class="card" href="https://t4p-ideaboard.build.happyoperators.com/">
+        <span class="chip">Happy Operators</span>
+        <span class="url">t4p-ideaboard<span class="rd">.</span>build</span>
+        <span class="desc">The public idea board for the Tech for Palestine × Thaura hackathon.</span>
+        <span class="go">Open →</span>
+      </a>
+      <a class="card" href="https://t4p-landing.build.happyoperators.com/">
+        <span class="chip">Happy Operators</span>
+        <span class="url">t4p-landing<span class="rd">.</span>build</span>
+        <span class="desc">The hackathon's landing page: the challenge, the agenda and registration.</span>
+        <span class="go">Open →</span>
+      </a>
+    </div>
   </div>
 </main>
 
@@ -197,7 +194,6 @@
   var go = document.getElementById('d-go');
   var msg = document.getElementById('d-msg');
   var log = document.getElementById('d-log');
-  var live = document.getElementById('d-live');
   var name = document.getElementById('d-name');
   var repo = document.getElementById('d-repo');
   var code = document.getElementById('d-code');
@@ -287,27 +283,36 @@
     });
   }
 
-  // ----- live list -----
-  function showLive(apps) {
-    live.innerHTML = '';
-    apps.forEach(function (a) {
-      var el = document.createElement('a');
-      el.href = a.url;
-      el.innerHTML = esc(a.name) + '<span class="rd">.</span>build';
-      live.appendChild(el);
-    });
+  // ----- live list: everything on <name>.build, kept up to date by the server -----
+  var grid = document.getElementById('d-grid');
+  function card(p) {
+    var a = document.createElement('a');
+    a.className = 'card';
+    a.href = p.url;
+    a.innerHTML = '<span class="chip">' + esc(p.kind) + '</span>' +
+      '<span class="url">' + esc(p.name) + '<span class="rd">.</span>build</span>' +
+      '<span class="desc">' + esc(p.desc || p.title || 'Shipped by the community.') + '</span>' +
+      '<span class="go">Open →</span>';
+    return a;
   }
+  function showLive() {
+    return fetch('/api/projects').then(function (r) { return r.json(); }).then(function (d) {
+      if (!d.projects || !d.projects.length) return;
+      grid.innerHTML = '';
+      d.projects.forEach(function (p) { grid.appendChild(card(p)); });
+    }).catch(function () {});
+  }
+  showLive();
   function refresh() { return fetch('/api/deploys').then(function (r) { return r.json(); }); }
   refresh().then(function (d) {
     if (!d.enabled) { form.innerHTML = '<p class="off">Deploys open soon.</p>'; return; }
     if (!d.needsCode) document.getElementById('d-code-wrap').hidden = true;
-    showLive(d.apps || []);
   }).catch(function () {});
 
   function done(url, extra) {
     go.disabled = false;
     say('', false, 'Live: <a href="' + esc(url) + '" target="_blank" rel="noopener">' + esc(url) + '</a>. The padlock can take a minute to appear.' + (extra || ''));
-    refresh().then(function (x) { showLive(x.apps || []); });
+    showLive();
   }
   function poll(id, url, extra) {
     fetch('/api/deploys/status/' + id).then(function (r) { return r.json(); }).then(function (d) {
