@@ -14,12 +14,6 @@
     --muted:#666666; --line:#E5E5E5; --orange:#FF4C11; --orange-dark:#E6430F; --field:#F5F5F5;
     --sans:'Onest',system-ui,sans-serif; --mono:'JetBrains Mono',ui-monospace,monospace;
   }
-  @media(prefers-color-scheme:dark){
-    :root{
-      --bg:#0A0A0A; --card:#171717; --card-hover:#262626; --ink:#FAFAFA; --fg:#FAFAFA;
-      --muted:#A3A3A3; --line:#262626; --orange:#FF6B3D; --orange-dark:#FF4C11; --field:#0F0F0F;
-    }
-  }
   *{margin:0;padding:0;box-sizing:border-box;}
   body{background:var(--bg);color:var(--fg);font-family:var(--sans);line-height:1.55;-webkit-font-smoothing:antialiased;min-height:100vh;display:flex;flex-direction:column;}
   a{color:inherit;}
@@ -30,8 +24,6 @@
   .top{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:22px 0;}
   .logo{display:flex;align-items:center;gap:12px;text-decoration:none;}
   .logo img{height:34px;width:auto;display:block;}
-  .logo .light-only{display:block;} .logo .dark-only{display:none;}
-  @media(prefers-color-scheme:dark){.logo .light-only{display:none;} .logo .dark-only{display:block;}}
   .logo .tag{font-family:var(--mono);font-size:12.5px;color:var(--muted);padding-left:12px;border-left:1px solid var(--line);}
   .top .cta{font-size:14px;font-weight:600;text-decoration:none;background:var(--ink);color:var(--bg);padding:9px 18px;border-radius:999px;white-space:nowrap;}
   .top .cta:hover{opacity:.88;}
@@ -100,8 +92,7 @@
 <div class="wrap">
   <header class="top">
     <a class="logo" href="https://happyoperators.com" aria-label="Happy Operators">
-      <img class="light-only" src="/brand/ho-lockup-dark.svg" alt="Happy Operators">
-      <img class="dark-only" src="/brand/ho-lockup-white.svg" alt="Happy Operators">
+      <img src="/brand/ho-lockup-dark.svg" alt="Happy Operators">
       <span class="tag">build</span>
     </a>
     <a class="cta" href="#deploy">Ship yours</a>
