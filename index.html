@@ -58,6 +58,36 @@
 
   .empty-note{margin-top:30px;font-size:14px;color:var(--ink-soft);}
 
+  h2{font-weight:800;font-size:clamp(24px,3vw,32px);letter-spacing:-.015em;margin-top:72px;}
+  h2 .slash{color:var(--red);}
+
+  .deploy{margin-top:22px;background:var(--paper);border:1px solid var(--ink);border-radius:10px;padding:26px;max-width:720px;}
+  .deploy .row{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px;}
+  .deploy .row:first-child{margin-top:0;}
+  .deploy .full{grid-column:1/-1;}
+  @media(max-width:640px){.deploy{padding:20px;}.deploy .row{grid-template-columns:1fr;}}
+  .deploy label{display:block;font-size:12.5px;font-weight:700;color:var(--ink-soft);margin-bottom:6px;}
+  .deploy input,.deploy select{width:100%;font:inherit;font-size:15px;padding:11px 12px;border:1px solid var(--line);border-radius:7px;background:var(--paper-warm);color:var(--ink);}
+  .deploy input:focus,.deploy select:focus{outline:2px solid var(--green);outline-offset:1px;border-color:var(--green);}
+  .deploy .addr{display:flex;align-items:center;border:1px solid var(--line);border-radius:7px;background:var(--paper-warm);overflow:hidden;}
+  .deploy .addr input{border:0;border-radius:0;background:transparent;min-width:0;}
+  .deploy .addr input:focus{outline:none;}
+  .deploy .addr:focus-within{outline:2px solid var(--green);outline-offset:1px;}
+  .deploy .addr span{padding:0 12px 0 2px;font-size:14px;color:var(--ink-soft);white-space:nowrap;}
+  .deploy .hint{font-size:12.5px;color:var(--ink-soft);margin-top:6px;}
+  .deploy button{margin-top:20px;font:inherit;font-weight:800;font-size:15px;padding:12px 22px;border:0;border-radius:7px;background:var(--green);color:#fff;cursor:pointer;}
+  .deploy button:disabled{opacity:.55;cursor:default;}
+  .deploy .msg{margin-top:16px;font-size:14.5px;}
+  .deploy .msg.err{color:var(--red);font-weight:700;}
+  .deploy .msg a{font-weight:800;color:var(--green);}
+  .deploy pre{margin-top:12px;max-height:240px;overflow:auto;background:var(--ink);color:#EDEBE4;font-size:12px;line-height:1.5;padding:12px 14px;border-radius:7px;white-space:pre-wrap;word-break:break-word;}
+  .deploy .off{font-size:14.5px;color:var(--ink-soft);}
+
+  .live{margin-top:26px;display:flex;flex-wrap:wrap;gap:10px;}
+  .live a{text-decoration:none;font-weight:700;font-size:14px;padding:8px 12px;border:1px solid var(--line);border-radius:7px;background:var(--paper);}
+  .live a:hover{border-color:var(--green);color:var(--green);}
+  .live a .rd{color:var(--red);}
+
   footer{background:var(--paper);border-top:1px solid var(--line);padding:20px 0;font-size:13.5px;color:var(--ink-soft);}
   @media(prefers-reduced-motion:reduce){.card{transition:none;transform:none;}}
 </style>
@@ -92,8 +122,154 @@
     </div>
 
     <p class="empty-note">Each project gets its own path; new ones appear here as they ship.</p>
+
+    <h2 id="deploy"><span class="slash">//</span> Ship yours.</h2>
+    <p class="sub">Got an app on GitHub? Put it live at your own address on this server. Paste a public repo, pick a name, done. Push changes and come back here to redeploy.</p>
+
+    <form class="deploy" id="deploy-form" novalidate>
+      <div class="row">
+        <div class="full">
+          <label for="d-repo">Public GitHub repo</label>
+          <input id="d-repo" name="repo" type="url" placeholder="https://github.com/you/your-app" required autocomplete="off">
+        </div>
+      </div>
+      <div class="row">
+        <div class="full">
+          <label for="d-name">Your address</label>
+          <div class="addr">
+            <input id="d-name" name="name" placeholder="your-app" required autocomplete="off" maxlength="30" pattern="[a-z0-9-]{3,30}">
+            <span>.build.happyoperators.com</span>
+          </div>
+          <p class="hint">Lowercase letters, numbers and dashes. Same name and same repo again = redeploy.</p>
+        </div>
+      </div>
+      <div class="row">
+        <div>
+          <label for="d-pack">What is it?</label>
+          <select id="d-pack" name="pack">
+            <option value="auto">An app (Node, Python, etc. auto-detected)</option>
+            <option value="dockerfile">An app with a Dockerfile</option>
+            <option value="static">A static site (just HTML files)</option>
+          </select>
+        </div>
+        <div>
+          <label for="d-port">Port your app listens on</label>
+          <input id="d-port" name="port" inputmode="numeric" value="3000">
+        </div>
+      </div>
+      <div class="row">
+        <div>
+          <label for="d-branch">Branch</label>
+          <input id="d-branch" name="branch" value="main" autocomplete="off">
+        </div>
+        <div id="d-code-wrap">
+          <label for="d-code">Access code</label>
+          <input id="d-code" name="code" autocomplete="off" placeholder="Ask Matt">
+        </div>
+      </div>
+      <button type="submit" id="d-go">Deploy it</button>
+      <div class="msg" id="d-msg" role="status" aria-live="polite"></div>
+      <pre id="d-log" hidden></pre>
+    </form>
+
+    <div class="live" id="d-live" aria-label="Live deploys"></div>
   </div>
 </main>
+
+<script>
+(function () {
+  var form = document.getElementById('deploy-form');
+  var go = document.getElementById('d-go');
+  var msg = document.getElementById('d-msg');
+  var log = document.getElementById('d-log');
+  var live = document.getElementById('d-live');
+  var pack = document.getElementById('d-pack');
+  var port = document.getElementById('d-port');
+  var name = document.getElementById('d-name');
+  var repo = document.getElementById('d-repo');
+
+  function say(text, err, html) {
+    msg.className = 'msg' + (err ? ' err' : '');
+    if (html) msg.innerHTML = html; else msg.textContent = text;
+  }
+  function esc(s) { return String(s).replace(/[&<>"']/g, function (c) { return '&#' + c.charCodeAt(0) + ';'; }); }
+
+  pack.addEventListener('change', function () {
+    port.disabled = pack.value === 'static';
+    if (pack.value === 'static') port.value = '80';
+    else if (port.value === '80') port.value = '3000';
+  });
+  name.addEventListener('input', function () {
+    name.value = name.value.toLowerCase().replace(/[^a-z0-9-]/g, '');
+  });
+  repo.addEventListener('change', function () {
+    var m = repo.value.match(/github\.com\/[^\/]+\/([^\/?#]+)/);
+    if (m && !name.value) name.value = m[1].replace(/\.git$/, '').toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/^-+|-+$/g, '').slice(0, 30);
+  });
+
+  function showLive(apps) {
+    live.innerHTML = '';
+    apps.forEach(function (a) {
+      var el = document.createElement('a');
+      el.href = a.url;
+      el.innerHTML = esc(a.name) + '<span class="rd">.</span>build';
+      el.title = a.repo;
+      live.appendChild(el);
+    });
+  }
+
+  fetch('/api/deploys').then(function (r) { return r.json(); }).then(function (d) {
+    if (!d.enabled) {
+      form.innerHTML = '<p class="off">Deploys open soon.</p>';
+      return;
+    }
+    if (!d.needsCode) document.getElementById('d-code-wrap').style.visibility = 'hidden';
+    showLive(d.apps || []);
+  }).catch(function () {});
+
+  function poll(id, url) {
+    fetch('/api/deploys/status/' + id).then(function (r) { return r.json(); }).then(function (d) {
+      if (d.log && d.log.length) { log.hidden = false; log.textContent = d.log.join('\n'); log.scrollTop = log.scrollHeight; }
+      if (d.status === 'finished') {
+        go.disabled = false;
+        say('', false, 'Live: <a href="' + esc(url) + '" target="_blank" rel="noopener">' + esc(url) + '</a>. The padlock can take a minute to appear.');
+        fetch('/api/deploys').then(function (r) { return r.json(); }).then(function (x) { showLive(x.apps || []); });
+      } else if (d.status === 'failed' || d.status === 'cancelled-by-user') {
+        go.disabled = false;
+        say('The build failed. Read the log below, fix it in your repo, push, and deploy again.', true);
+      } else {
+        say('Building (' + (d.status || 'queued') + '). This usually takes 1 to 3 minutes…');
+        setTimeout(function () { poll(id, url); }, 4000);
+      }
+    }).catch(function () { setTimeout(function () { poll(id, url); }, 6000); });
+  }
+
+  form.addEventListener('submit', function (e) {
+    e.preventDefault();
+    go.disabled = true;
+    log.hidden = true;
+    say('Setting it up…');
+    var body = {
+      repo: repo.value.trim(),
+      name: name.value.trim(),
+      pack: pack.value,
+      port: port.value.trim(),
+      branch: document.getElementById('d-branch').value.trim(),
+      code: document.getElementById('d-code').value.trim()
+    };
+    fetch('/api/deploys', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+      .then(function (r) { return r.json().then(function (d) { return [r.ok, d]; }); })
+      .then(function (x) {
+        var ok = x[0], d = x[1];
+        if (!ok) { go.disabled = false; return say(d.error || 'Something went wrong.', true); }
+        if (!d.deployment) { go.disabled = false; return say('', false, 'Queued. It will be live at <a href="' + esc(d.url) + '">' + esc(d.url) + '</a> in a few minutes.'); }
+        say(d.redeploy ? 'Redeploying…' : 'Created. Building…');
+        poll(d.deployment, d.url);
+      })
+      .catch(function () { go.disabled = false; say('Could not reach the server. Try again.', true); });
+  });
+})();
+</script>
 
 <footer>
   <div class="wrap">build.happyoperators.com</div>

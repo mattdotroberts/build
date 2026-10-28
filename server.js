@@ -12,6 +12,7 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
+const deploys = require('./deploy');
 
 const PORT = process.env.PORT || 3000;
 const ROOT = __dirname;
@@ -120,6 +121,8 @@ const server = http.createServer(async (req, res) => {
   catch (e) { return send(res, 400, 'Bad request', 'text/plain'); }
 
   // ----- API -----
+  if (await deploys.handle(req, res, p, send, readBody)) return;
+
   if (p === '/api/notes' && req.method === 'GET') {
     return send(res, 200, JSON.stringify({ notes: notes }));
   }
