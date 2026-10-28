@@ -136,7 +136,7 @@
   }
   .note{
     position:relative;
-    padding:20px 20px 44px;
+    padding:32px 20px 44px;
     min-height:180px;
     box-shadow:0 14px 30px rgba(0,0,0,.13);
     border-bottom:5px solid rgba(0,0,0,.12);
@@ -149,10 +149,11 @@
   .note .txt{font-size:16px;font-weight:700;line-height:1.4;letter-spacing:-.005em;}
   .note .meta{
     position:absolute;left:20px;right:20px;bottom:14px;
-    display:flex;justify-content:space-between;align-items:baseline;gap:8px;
+    display:flex;justify-content:flex-start;align-items:baseline;gap:8px;
   }
   .note .who{font-size:13px;font-weight:700;color:var(--ink-soft);}
   .note .del{
+    position:absolute;top:10px;right:10px;
     background:none;border:none;cursor:pointer;
     font-family:var(--sans);font-size:12px;font-weight:700;color:#b3aea2;
     padding:2px 4px;
@@ -226,7 +227,7 @@
     <span class="m" id="statusmsg">Loading…</span>
   </div>
   <div class="offline" id="offline" style="display:none;">
-    <strong>Heads up:</strong> this board saves notes when it's opened inside Thaura, and everyone who opens it sees the same wall. Right now it can't save, so notes you add will only stay for this session.
+    <strong>Heads up:</strong> the board can't reach its server right now, so it can't load or save notes. Check your connection and reload the page.
   </div>
 
   <div class="board" id="board" aria-live="polite">
@@ -243,7 +244,7 @@
 
 <script>
 (function(){
-  var KEY = 't4p-ideaboard-v1';
+  var API = '/api/notes';
   var board = document.getElementById('board');
   var statusmsg = document.getElementById('statusmsg');
   var offline = document.getElementById('offline');
@@ -253,7 +254,6 @@
   var pinBtn = document.getElementById('pin');
   var color = '1';
   var notes = [];
-  var canStore = !!(window.storage && typeof window.storage.get === 'function');
   var saving = false;
 
   function esc(s){
@@ -278,40 +278,32 @@
         '<div class="seed">Need a spark? From the challenge brief: <b>a browser plugin that flags complicit sites</b>, <b>a one-click migration guide off Google Workspace</b>, <b>a WhatsApp export tool</b>.</div>' +
         '</div>';
     } else {
-      board.innerHTML = notes.map(function(n, i){
+      board.innerHTML = notes.map(function(n){
         return '<div class="note b' + (n.c||1) + '" style="--rot:' + rotFor(n).toFixed(1) + 'deg">' +
+          '<button class="del" data-id="' + esc(n.id) + '" title="Remove this note">remove</button>' +
           '<div class="txt">' + esc(n.x) + '</div>' +
-          '<div class="meta"><span class="who">' + (n.w ? esc(n.w) : 'Anonymous') + '</span>' +
-          '<button class="del" data-i="' + i + '" title="Remove this note">remove</button></div>' +
+          '<div class="meta"><span class="who">' + (n.w ? esc(n.w) : 'Anonymous') + '</span></div>' +
           '</div>';
       }).join('');
     }
     statusmsg.textContent = notes.length
-      ? notes.length + (notes.length === 1 ? ' idea pinned' : ' ideas pinned') + (canStore ? ' • visible to everyone who opens this board' : ' • this session only')
+      ? notes.length + (notes.length === 1 ? ' idea pinned' : ' ideas pinned') + ' • visible to everyone who opens this board'
       : '';
   }
 
   function load(){
-    if(!canStore){
+    fetch(API).then(function(r){
+      if(!r.ok) throw new Error('bad status');
+      return r.json();
+    }).then(function(d){
+      notes = Array.isArray(d.notes) ? d.notes : [];
+      offline.style.display = 'none';
+      render();
+    }).catch(function(){
       notes = [];
       offline.style.display = 'block';
       render();
-      return;
-    }
-    window.storage.get(KEY, true).then(function(r){
-      if(r && r.value){
-        try { notes = JSON.parse(r.value); } catch(e){ notes = []; }
-      }
-      render();
-    }).catch(function(){
-      // first visit: the key doesn't exist yet
-      notes = [];
-      render();
     });
-  }
-
-  function persist(){
-    return window.storage.set(KEY, JSON.stringify(notes), true);
   }
 
   pinBtn.addEventListener('click', function(){
@@ -321,36 +313,38 @@
     saving = true;
     pinBtn.disabled = true;
     pinBtn.textContent = 'Pinning…';
-    var n = { id: 'n' + Date.now() + Math.floor(Math.random()*999), x: x, w: whoEl.value.trim(), c: color, t: Date.now() };
-    notes.unshift(n);
-    if(notes.length > 300) notes.length = 300;
-    render();
-    ideaEl.value = '';
-    countEl.textContent = '280';
-    if(canStore){
-      persist().then(function(){
-        saving = false; pinBtn.disabled = false; pinBtn.textContent = 'Pin it to the board';
-      }).catch(function(){
-        saving = false; pinBtn.disabled = false; pinBtn.textContent = 'Pin it to the board';
-        canStore = false;
-        offline.style.display = 'block';
-        statusmsg.textContent = notes.length + ' ideas pinned • this session only';
-      });
-    } else {
+    fetch(API, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ x: x, w: whoEl.value.trim(), c: color })
+    }).then(function(r){
+      if(!r.ok) throw new Error('bad status');
+      return r.json();
+    }).then(function(d){
+      if(d && d.note){ notes.unshift(d.note); if(notes.length > 300) notes.length = 300; }
+      offline.style.display = 'none';
+      render();
+      ideaEl.value = '';
+      countEl.textContent = '280';
       saving = false; pinBtn.disabled = false; pinBtn.textContent = 'Pin it to the board';
-    }
+    }).catch(function(){
+      saving = false; pinBtn.disabled = false; pinBtn.textContent = 'Pin it to the board';
+      offline.style.display = 'block';
+    });
   });
 
   board.addEventListener('click', function(ev){
     var b = ev.target.closest('.del');
     if(!b) return;
-    var i = parseInt(b.getAttribute('data-i'), 10);
-    if(isNaN(i) || !notes[i]) return;
-    notes.splice(i, 1);
+    var id = b.getAttribute('data-id');
+    notes = notes.filter(function(n){ return n.id !== id; });
     render();
-    if(canStore){
-      persist().then(render).catch(function(){ canStore = false; offline.style.display = 'block'; });
-    }
+    fetch(API + '/' + encodeURIComponent(id), { method: 'DELETE' })
+      .then(function(r){
+        if(!r.ok) throw new Error('bad status');
+        offline.style.display = 'none';
+      })
+      .catch(function(){ offline.style.display = 'block'; });
   });
 
   document.querySelectorAll('.chip').forEach(function(ch){
