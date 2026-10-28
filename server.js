@@ -125,13 +125,63 @@ const STATIC_TYPES = {
   '.wasm': 'application/wasm'
 };
 
-function serveFile(res, full) {
+function serveFile(res, full, pageUrl) {
   fs.readFile(full, (err, data) => {
     if (err) return send(res, 404, 'Not found', 'text/plain');
-    const type = STATIC_TYPES[path.extname(full).toLowerCase()] || 'application/octet-stream';
+    const ext = path.extname(full).toLowerCase();
+    const type = STATIC_TYPES[ext] || 'application/octet-stream';
+    if ((ext === '.html' || ext === '.htm') && pageUrl) data = addShareTags(data.toString('utf8'), pageUrl);
     res.writeHead(200, { 'Content-Type': type, 'Cache-Control': 'no-cache' });
     res.end(data);
   });
+}
+
+// ---------- link previews: fill in any missing Open Graph / Twitter tags ----------
+const SHARE_IMAGE = 'https://' + SITE + '/brand/og.png';
+function attr(s) { return String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;'); }
+function plain(s) {
+  return String(s).replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&')
+    .replace(/&#?\w+;/g, ' ').replace(/\s+/g, ' ').trim();
+}
+function addShareTags(html, pageUrl) {
+  let head = html.match(/<head[^>]*>([\s\S]*?)<\/head>/i);
+  if (!head) {
+    // bare fragment or no <head>: give it one so previews still work
+    html = /<html[^>]*>/i.test(html) ? html.replace(/<html[^>]*>/i, (t) => t + '<head></head>') : '<head></head>\n' + html;
+    head = html.match(/<head[^>]*>([\s\S]*?)<\/head>/i);
+  }
+  const has = (prop) => new RegExp('<meta[^>]+(property|name)=["\']' + prop.replace(/[:.]/g, '\\$&') + '["\']', 'i').test(head[1]);
+  const meta = (prop) => {
+    const m = head[1].match(new RegExp('<meta[^>]+(?:property|name)=["\']' + prop.replace(/[:.]/g, '\\$&') + '["\'][^>]*content=["\']([^"\']*)', 'i'));
+    return m ? m[1] : '';
+  };
+  const titleTag = head[1].match(/<title[^>]*>([^<]*)<\/title>/i);
+  const h1 = html.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i);
+  const title = meta('og:title') || plain(titleTag ? titleTag[1] : '') || plain(h1 ? h1[1] : '') || new URL(pageUrl).host;
+  let desc = meta('og:description') || meta('description');
+  if (!desc) {
+    const h1At = html.search(/<\/h1>/i);
+    const ps = html.slice(h1At > -1 ? h1At : 0).match(/<p[^>]*>([\s\S]*?)<\/p>/gi) || [];
+    const first = ps.map(plain).find((t) => t.length > 40);
+    desc = first || 'Built and shipped on ' + SITE + ' by Happy Operators.';
+  }
+  if (desc.length > 200) desc = desc.slice(0, 197).replace(/\s+\S*$/, '') + '…';
+  const add = [];
+  const put = (prop, val, kind) => { if (!has(prop)) add.push('<meta ' + (kind || 'property') + '="' + prop + '" content="' + attr(val) + '">'); };
+  put('description', desc, 'name');
+  put('og:type', 'website');
+  put('og:site_name', 'Happy Operators · build');
+  put('og:title', title);
+  put('og:description', desc);
+  put('og:url', pageUrl);
+  put('og:image', SHARE_IMAGE);
+  if (!has('og:image')) { put('og:image:width', '1200'); put('og:image:height', '630'); }
+  put('twitter:card', 'summary_large_image', 'name');
+  put('twitter:title', title, 'name');
+  put('twitter:description', desc, 'name');
+  put('twitter:image', meta('og:image') || SHARE_IMAGE, 'name');
+  if (!add.length) return html;
+  return html.replace(/<\/head>/i, add.join('\n') + '\n</head>');
 }
 
 // <name> when the request came in on <name>.build.happyoperators.com
@@ -181,7 +231,7 @@ function docsPage(md) {
   }
   flush();
   return '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">' +
-    '<title>Deploy · Happy Operators</title><link rel="alternate" type="text/markdown" href="/deploy.md">' +
+    '<title>Deploy · Happy Operators</title><meta name="description" content="Put your website or app live at your own address on build.happyoperators.com. Drop the files or link a GitHub repo. Works with Claude, Codex and other AI agents."><link rel="alternate" type="text/markdown" href="/deploy.md">' +
     '<link href="https://fonts.googleapis.com/css2?family=Onest:wght@400;600;700&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">' +
     '<style>body{margin:0;background:#FAFAFA;color:#1A1A1A;font:16px/1.65 Onest,system-ui,sans-serif;-webkit-font-smoothing:antialiased}' +
     'main{max-width:760px;margin:0 auto;padding:28px 16px 80px}header{display:flex;align-items:center;justify-content:space-between;margin-bottom:40px}' +
@@ -208,7 +258,7 @@ const server = http.createServer(async (req, res) => {
     const md = fs.readFileSync(path.join(ROOT, 'deploy.md'), 'utf8');
     const wantsHtml = p.startsWith('/deploy') && p !== '/deploy.md' && /text\/html/.test(req.headers.accept || '');
     if (!wantsHtml) return send(res, 200, md, 'text/markdown; charset=utf-8');
-    return send(res, 200, docsPage(md), 'text/html; charset=utf-8');
+    return send(res, 200, addShareTags(docsPage(md), 'https://' + SITE + '/deploy'), 'text/html; charset=utf-8');
   }
 
   if (p === '/api/notes' && req.method === 'GET') {
@@ -267,6 +317,7 @@ const server = http.createServer(async (req, res) => {
   let file = p === '/' ? '/index.html' : decodeURIComponent(p);
   const full = path.normalize(path.join(base, file));
   if (!full.startsWith(base)) return send(res, 403, 'Forbidden', 'text/plain');
+  const pageUrl = 'https://' + (sub ? sub + '.' : '') + SITE + p;
 
   fs.stat(full, (err, st) => {
     if (!err && st.isDirectory()) {
@@ -276,9 +327,9 @@ const server = http.createServer(async (req, res) => {
         res.writeHead(301, { Location: p + '/' });
         return res.end();
       }
-      return serveFile(res, path.join(full, 'index.html'));
+      return serveFile(res, path.join(full, 'index.html'), pageUrl);
     }
-    serveFile(res, full);
+    serveFile(res, full, pageUrl);
   });
 });
 
