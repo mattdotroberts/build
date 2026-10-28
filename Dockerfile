@@ -3,6 +3,7 @@ WORKDIR /app
 
 COPY server.js deploy.js ./
 COPY index.html ./
+COPY brand ./brand
 COPY p ./p
 
 ENV PORT=3000

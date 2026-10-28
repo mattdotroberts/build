@@ -16,6 +16,7 @@ const deploys = require('./deploy');
 
 const PORT = process.env.PORT || 3000;
 const ROOT = __dirname;
+const SITE = process.env.SITE_DOMAIN || 'build.happyoperators.com';
 const DATA_DIR = process.env.DATA_DIR || path.join(ROOT, 'data');
 const DATA_FILE = path.join(DATA_DIR, 'notes.json');
 const MAX_NOTES = 300;
@@ -162,9 +163,23 @@ const server = http.createServer(async (req, res) => {
     return send(res, 405, 'Method not allowed', 'text/plain');
   }
 
+  // projects in ./p live on their own subdomain: <name>.build.happyoperators.com
+  const host = String(req.headers.host || '').split(':')[0].toLowerCase();
+  const sub = host.endsWith('.' + SITE) ? host.slice(0, -SITE.length - 1) : '';
+  const old = p.match(/^\/p\/([a-z0-9-]+)\/?$/);
+  if (!sub && old && fs.existsSync(path.join(ROOT, 'p', old[1], 'index.html'))) {
+    res.writeHead(301, { Location: 'https://' + old[1] + '.' + SITE + '/' });
+    return res.end();
+  }
+  let base = ROOT;
+  if (sub) {
+    base = path.join(ROOT, 'p', sub);
+    if (!/^[a-z0-9-]+$/.test(sub) || !fs.existsSync(base)) return send(res, 404, 'Not found', 'text/plain');
+  }
+
   let file = p === '/' ? '/index.html' : decodeURIComponent(p);
-  const full = path.normalize(path.join(ROOT, file));
-  if (!full.startsWith(ROOT)) return send(res, 403, 'Forbidden', 'text/plain');
+  const full = path.normalize(path.join(base, file));
+  if (!full.startsWith(base)) return send(res, 403, 'Forbidden', 'text/plain');
 
   fs.stat(full, (err, st) => {
     if (!err && st.isDirectory()) {
