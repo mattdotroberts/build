@@ -176,6 +176,9 @@ async function deploy(body, ip) {
     // most frameworks listen on $PORT, so tell the app which one we route to
     if (plan.pack !== 'static' && !plan.publish) {
       await api('POST', '/applications/' + uuid + '/envs', { key: 'PORT', value: String(port), is_preview: false });
+      // a folder that survives redeploys, for apps that save files (SQLite, JSON, uploads)
+      await api('POST', '/applications/' + uuid + '/storages', { type: 'persistent', name: name + '-data', mount_path: '/data' });
+      await api('POST', '/applications/' + uuid + '/envs', { key: 'DATA_DIR', value: '/data', is_preview: false });
     }
   }
 

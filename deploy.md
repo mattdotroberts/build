@@ -72,6 +72,7 @@ curl -s -X POST https://build.happyoperators.com/api/deploys \
 
 - The server reads the repo and works out how to run it: Dockerfile (uses its `EXPOSE` port), Node or Next.js (port 3000, `PORT` is set for you), Vite or React front-ends (built, then served as static files), Python, Go, Ruby, or a plain `index.html`. The reply says what it `detected`.
 - The app should listen on the `PORT` environment variable. Most frameworks already do.
+- Need to save data (SQLite, JSON files, uploads)? Write it under `/data` (also in the `DATA_DIR` environment variable). That folder survives redeploys. Everything else is wiped on each deploy.
 - Optional overrides if detection gets it wrong: `"branch"` (default: the repo's default branch), `"pack"` (`auto`, `dockerfile` or `static`) and `"port"`.
 - The reply has a `deployment` id. Poll `GET https://build.happyoperators.com/api/deploys/status/<deployment>` every few seconds. `status` goes `queued`, `in_progress`, then `finished` or `failed`. `log` has the last build lines; if it failed, read them, fix the repo, push, and send the same request again.
 - Sending the same name with the same repo again redeploys it.
