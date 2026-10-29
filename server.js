@@ -1,13 +1,7 @@
 // build.happyoperators.com — zero-dependency Node server.
-// Serves the static site from the repo root and a small JSON-backed
-// notes API for the idea board at /p/t4p-ideaboard.
-//
-//   GET    /api/notes          -> { notes: [...] }
-//   POST   /api/notes          { x, w, c } -> { note }   (max 30 pins/hour per IP)
-//   DELETE /api/notes/<id>     -> { ok: true }
-//
-// Notes are stored in DATA_DIR (default ./data) as notes.json.
-// Mount DATA_DIR as a volume in Coolify so notes survive redeploys.
+// Serves the home page, projects in ./p and uploaded sites on <name>.build.happyoperators.com,
+// plus the deploy and upload APIs (deploy.js, sites.js).
+// DATA_DIR (a Coolify volume) holds uploaded sites so they survive redeploys.
 
 const http = require('http');
 const fs = require('fs');
@@ -19,33 +13,6 @@ const PORT = process.env.PORT || 3000;
 const ROOT = __dirname;
 const SITE = process.env.SITE_DOMAIN || 'build.happyoperators.com';
 const DATA_DIR = process.env.DATA_DIR || path.join(ROOT, 'data');
-const DATA_FILE = path.join(DATA_DIR, 'notes.json');
-const MAX_NOTES = 300;
-
-// ---------- storage ----------
-let notes = [];
-function loadNotes() {
-  try {
-    const parsed = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
-    notes = Array.isArray(parsed) ? parsed : [];
-  } catch (e) {
-    notes = [];
-  }
-}
-let saveTimer = null;
-function saveNotes() {
-  clearTimeout(saveTimer);
-  saveTimer = setTimeout(() => {
-    fs.mkdir(DATA_DIR, { recursive: true }, () => {
-      const tmp = DATA_FILE + '.tmp';
-      fs.writeFile(tmp, JSON.stringify(notes), (err) => {
-        if (err) return console.error('save failed:', err.message);
-        fs.rename(tmp, DATA_FILE, () => {});
-      });
-    });
-  }, 200);
-}
-loadNotes();
 
 // ---------- helpers ----------
 function send(res, code, body, type) {
@@ -68,25 +35,6 @@ function readBody(req) {
     req.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
     req.on('error', reject);
   });
-}
-
-function clean(s, max) {
-  return String(s || '')
-    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '')
-    .trim()
-    .slice(0, max);
-}
-
-// rate limit: max 30 pins per IP per hour
-const hits = new Map();
-function limited(ip) {
-  const now = Date.now();
-  const win = 60 * 60 * 1000;
-  const arr = (hits.get(ip) || []).filter((t) => now - t < win);
-  arr.push(now);
-  hits.set(ip, arr);
-  if (hits.size > 5000) hits.clear();
-  return arr.length > 30;
 }
 
 const STATIC_TYPES = {
@@ -302,40 +250,6 @@ const server = http.createServer(async (req, res) => {
     const wantsHtml = p.startsWith('/deploy') && p !== '/deploy.md' && /text\/html/.test(req.headers.accept || '');
     if (!wantsHtml) return send(res, 200, md, 'text/markdown; charset=utf-8');
     return send(res, 200, addShareTags(docsPage(md), 'https://' + SITE + '/deploy'), 'text/html; charset=utf-8');
-  }
-
-  if (p === '/api/notes' && req.method === 'GET') {
-    return send(res, 200, JSON.stringify({ notes: notes }));
-  }
-
-  if (p === '/api/notes' && req.method === 'POST') {
-    const ip = ((req.headers['x-forwarded-for'] || '').split(',')[0].trim()) || req.socket.remoteAddress || '';
-    if (limited(ip)) return send(res, 429, JSON.stringify({ error: 'Too many pins from one address. Try again later.' }));
-    let body;
-    try { body = JSON.parse(await readBody(req)); }
-    catch (e) { return send(res, 400, JSON.stringify({ error: 'Bad request' })); }
-    const x = clean(body.x, 280);
-    if (!x) return send(res, 400, JSON.stringify({ error: 'Empty idea' }));
-    const note = {
-      id: 'n' + Date.now().toString(36) + Math.floor(Math.random() * 1e6).toString(36),
-      x: x,
-      w: clean(body.w, 60),
-      c: ['1', '2', '3', '4'].includes(String(body.c)) ? String(body.c) : '1',
-      t: Date.now()
-    };
-    notes.unshift(note);
-    if (notes.length > MAX_NOTES) notes.length = MAX_NOTES;
-    saveNotes();
-    return send(res, 200, JSON.stringify({ note: note }));
-  }
-
-  const del = p.match(/^\/api\/notes\/([a-z0-9]+)$/);
-  if (del && req.method === 'DELETE') {
-    const i = notes.findIndex((n) => n.id === del[1]);
-    if (i === -1) return send(res, 404, JSON.stringify({ error: 'No such note' }));
-    notes.splice(i, 1);
-    saveNotes();
-    return send(res, 200, JSON.stringify({ ok: true }));
   }
 
   // ----- static -----
